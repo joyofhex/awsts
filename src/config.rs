@@ -7,6 +7,7 @@ use rusoto_core::credential::{AwsCredentials, StaticProvider};
 use rusoto_core::{Region, HttpClient};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
+use crate::error::CliError;
 
 pub struct CliConfig {
     path: PathBuf,
@@ -30,18 +31,21 @@ struct Config {
 }
 
 impl CliConfig {
-    pub fn load(program_name: &str) -> CliConfig {
+    pub fn load(program_name: &str) -> super::Result<CliConfig> {
         let path = Self::construct_path(program_name);
-        let contents = std::fs::read_to_string(&path).unwrap();
-        let options= serde_json::from_str(&contents).unwrap();
-        CliConfig { path, options }
+        let contents = std::fs::read_to_string(&path)?;
+        let options= serde_json::from_str(&contents)?;
+        Ok(CliConfig { path, options })
     }
 
-    fn save(&self) {
-        let directory = self.path.parent().unwrap();
-        create_dir_all(directory).unwrap();
-        let file = File::create(&self.path).unwrap();
-        serde_json::to_writer_pretty(file, &self.options).unwrap();
+    fn save(&self) -> super::Result<()> {
+        let directory = self.path.parent().expect("Parent path could not be extracted.");
+
+        create_dir_all(directory)?;
+        let file = File::create(&self.path)?;
+        serde_json::to_writer_pretty(file, &self.options)?;
+
+        Ok(())
     }
 
     fn construct_path(program_name: &str) -> PathBuf {
@@ -51,44 +55,57 @@ impl CliConfig {
         path
     }
 
-    pub fn set_mfa(&mut self, serial_number: &str) {
+    pub fn set_mfa(&mut self, serial_number: &str) -> super::Result<()> {
         self.options.mfa_serial_number = serial_number.to_string();
-        self.save();
+        self.save()?;
+
+        Ok(())
     }
 
     pub fn get_mfa(&self) -> String {
         self.options.mfa_serial_number.to_string()
     }
 
-    pub fn set_session_name(&mut self, session_name: &str) {
+    pub fn set_session_name(&mut self, session_name: &str) -> super::Result<()> {
         self.options.session_name = session_name.to_string();
-        self.save();
+        self.save()?;
+
+        Ok(())
     }
 
-    pub fn set_session_token(&mut self, credentials: Credentials) {
+    pub fn set_session_token(&mut self, credentials: Credentials) -> super::Result<()> {
         let credentials= CredentialsDef::from(credentials);
         self.options.session_token = Some(credentials);
-        println!("opts: {:?}", self.options);
-        self.save();
+        self.save()?;
+
+        Ok(())
     }
 
-    pub fn add_role(&mut self, name: &str, arn: &str) {
+    pub fn add_role(&mut self, name: &str, arn: &str) -> super::Result<()> {
         self.options.roles.insert(name.to_string(), arn.to_string());
-        self.save();
+        self.save()?;
+
+        Ok(())
     }
 
     pub fn get_roles(&self) -> HashMap<String, String> {
         self.options.roles.to_owned()
     }
 
-    pub fn remove_role(&mut self, name: &str) {
+    pub fn remove_role(&mut self, name: &str) -> super::Result<()> {
         self.options.roles.remove(name);
-        self.save();
+        self.save()?;
+
+        Ok(())
     }
 
-    pub async fn fetch_sts(&mut self, name: &str) {
-        let token = self.options.session_token.as_ref().unwrap();
-        let expiry= DateTime::parse_from_rfc3339(&token.expiration).unwrap().with_timezone(&Utc);
+    pub async fn fetch_sts(&mut self, name: &str) -> super::Result<()> {
+        let token = self.options.session_token.as_ref()
+            .ok_or(CliError::NoSessionToken())?;
+
+        let expiry = DateTime::parse_from_rfc3339(&token.expiration)?
+            .with_timezone(&Utc);
+
         let credentials = AwsCredentials::new(
             &token.access_key_id,
             &token.secret_access_key,
@@ -103,19 +120,27 @@ impl CliConfig {
             Region::EuWest1,
         );
 
+        let arn = self.options.roles.get(name)
+            .ok_or(CliError::RoleNotFound(name.to_string()))?;
+
         let assume_role_result = sts.assume_role(
             AssumeRoleRequest {
-                role_arn: self.options.roles.get(name).unwrap().to_owned(),
+                role_arn: arn.to_owned(),
                 role_session_name: self.options.session_name.to_owned(),
                 ..Default::default()
             }
-        ).await.unwrap();
-        let sts_credentials = assume_role_result.credentials.unwrap();
+        ).await?;
+
+        let sts_credentials = assume_role_result.credentials
+            .ok_or(CliError::NoCredentialsInResponse())?;
+
         println!("export AWS_ACCESS_KEY_ID={}", sts_credentials.access_key_id);
         println!("export AWS_SECRET_ACCESS_KEY={}", sts_credentials.secret_access_key);
         println!("export AWS_SESSION_TOKEN={}", sts_credentials.session_token);
         println!("export AWS_CREDENTIAL_EXPIRATION={}", sts_credentials.expiration);
 
+
+        Ok(())
     }
 }
 
