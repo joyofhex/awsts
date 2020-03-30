@@ -11,6 +11,7 @@ pub enum CliError {
     DateTimeParseFailure(chrono::format::ParseError),
     RusotoError(String),
     NoCredentialsInResponse(),
+    ConfigDirectoryNotAvailable(),
 }
 
 impl fmt::Display for CliError {
@@ -23,6 +24,7 @@ impl fmt::Display for CliError {
             CliError::DateTimeParseFailure(ref err) => err.fmt(f),
             CliError::RusotoError(ref err) => err.fmt(f),
             CliError::NoCredentialsInResponse() => write!(f, "No credentials provided in response"),
+            CliError::ConfigDirectoryNotAvailable() => write!(f, "Platform has no available config directory"),
         }
     }
 }
@@ -37,6 +39,7 @@ impl Error for CliError {
             CliError::DateTimeParseFailure(ref err) => Some(err),
             CliError::RusotoError(ref _err) => None,
             CliError::NoCredentialsInResponse() => None,
+            CliError::ConfigDirectoryNotAvailable() => None,
         }
     }
 }

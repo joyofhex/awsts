@@ -32,7 +32,8 @@ struct Config {
 
 impl CliConfig {
     pub fn load(program_name: &str) -> super::Result<CliConfig> {
-        let path = Self::construct_path(program_name);
+        let path = Self::construct_path(program_name)?;
+
         if path.is_file() {
             let contents = std::fs::read_to_string(&path)?;
             let options= serde_json::from_str(&contents)?;
@@ -56,11 +57,13 @@ impl CliConfig {
         Ok(())
     }
 
-    fn construct_path(program_name: &str) -> PathBuf {
-        let mut path = dirs::config_dir().unwrap();
+    fn construct_path(program_name: &str) -> super::Result<PathBuf> {
+        let mut path = dirs::config_dir()
+            .ok_or(CliError::ConfigDirectoryNotAvailable())?;
+
         path.push(program_name);
         path.push("config");
-        path
+        Ok(path)
     }
 
     pub fn set_mfa(&mut self, serial_number: &str) -> super::Result<()> {
