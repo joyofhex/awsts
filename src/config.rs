@@ -2,11 +2,8 @@
 use std::path::PathBuf;
 use serde::{Serialize, Deserialize};
 use std::fs::{File, create_dir_all};
-use rusoto_sts::{Credentials, StsClient, Sts, AssumeRoleRequest};
-use rusoto_core::credential::{AwsCredentials, StaticProvider};
-use rusoto_core::{Region, HttpClient};
+use rusoto_sts::Credentials as RusotoCredentials;
 use std::collections::HashMap;
-use chrono::{DateTime, Utc};
 use crate::error::CliError;
 
 pub struct CliConfig {
@@ -15,11 +12,11 @@ pub struct CliConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize)]
-struct CredentialsDef {
-    access_key_id: String,
-    secret_access_key: String,
-    session_token: String,
-    expiration: String,
+pub struct Credentials {
+    pub access_key_id: String,
+    pub secret_access_key: String,
+    pub session_token: String,
+    pub expiration: String,
 }
 
 #[derive(Debug, Serialize, Deserialize, Default)]
@@ -27,7 +24,7 @@ struct Config {
     mfa_serial_number: String,
     session_name: String,
     roles: HashMap<String, String>,
-    session_token: Option<CredentialsDef>,
+    session_token: Option<Credentials>,
 }
 
 impl CliConfig {
@@ -84,12 +81,20 @@ impl CliConfig {
         Ok(())
     }
 
-    pub fn set_session_token(&mut self, credentials: Credentials) -> super::Result<()> {
-        let credentials= CredentialsDef::from(credentials);
+    pub fn get_session_name(&self) -> String {
+        self.options.session_name.to_string()
+    }
+
+    pub fn set_session_token(&mut self, credentials: RusotoCredentials) -> super::Result<()> {
+        let credentials= Credentials::from(credentials);
         self.options.session_token = Some(credentials);
         self.save()?;
 
         Ok(())
+    }
+
+    pub fn get_session_token(&self) -> Option<Credentials> {
+        self.options.session_token.clone()
     }
 
     pub fn add_role(&mut self, name: &str, arn: &str) -> super::Result<()> {
@@ -110,58 +115,29 @@ impl CliConfig {
         Ok(())
     }
 
-    pub async fn fetch_sts(&mut self, name: &str) -> super::Result<()> {
-        let token = self.options.session_token.as_ref()
-            .ok_or(CliError::NoSessionToken())?;
-
-        let expiry = DateTime::parse_from_rfc3339(&token.expiration)?
-            .with_timezone(&Utc);
-
-        let credentials = AwsCredentials::new(
-            &token.access_key_id,
-            &token.secret_access_key,
-            Some(token.session_token.to_owned()),
-            Some(expiry),
-        );
-
-        let provider = StaticProvider::from(credentials);
-        let sts = StsClient::new_with(
-            HttpClient::new().expect("failed"),
-            provider,
-            Region::EuWest1,
-        );
-
-        let arn = self.options.roles.get(name)
-            .ok_or(CliError::RoleNotFound(name.to_string()))?;
-
-        let assume_role_result = sts.assume_role(
-            AssumeRoleRequest {
-                role_arn: arn.to_owned(),
-                role_session_name: self.options.session_name.to_owned(),
-                ..Default::default()
-            }
-        ).await?;
-
-        let sts_credentials = assume_role_result.credentials
-            .ok_or(CliError::NoCredentialsInResponse())?;
-
-        println!("export AWS_ACCESS_KEY_ID={}", sts_credentials.access_key_id);
-        println!("export AWS_SECRET_ACCESS_KEY={}", sts_credentials.secret_access_key);
-        println!("export AWS_SESSION_TOKEN={}", sts_credentials.session_token);
-        println!("export AWS_CREDENTIAL_EXPIRATION={}", sts_credentials.expiration);
-
-
-        Ok(())
+    pub fn get_role_arn(&self, name: &str) -> Option<&String> {
+        self.options.roles.get(name)
     }
 }
 
-impl From<Credentials> for CredentialsDef {
-    fn from(credentials: Credentials) -> Self {
-        CredentialsDef {
+impl From<RusotoCredentials> for Credentials {
+    fn from(credentials: RusotoCredentials) -> Self {
+        Credentials {
             access_key_id: credentials.access_key_id,
             secret_access_key: credentials.secret_access_key,
             session_token: credentials.session_token,
             expiration: credentials.expiration,
+        }
+    }
+}
+
+impl Clone for Credentials {
+    fn clone(&self) -> Credentials {
+        Credentials {
+            access_key_id: self.access_key_id.to_owned(),
+            secret_access_key: self.secret_access_key.to_owned(),
+            session_token: self.session_token.to_owned(),
+            expiration: self.expiration.to_owned(),
         }
     }
 }

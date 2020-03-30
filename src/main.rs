@@ -2,17 +2,13 @@ extern crate structopt;
 
 mod config;
 mod error;
+mod aws_sts;
 
 use structopt::StructOpt;
-use rusoto_sts::{StsClient, Sts, GetSessionTokenRequest};
-use std::time::Duration;
-use rusoto_core::{HttpClient, Region};
-use rusoto_core::credential::ChainProvider;
-use std::io;
-use std::io::Write;
 use std::collections::HashMap;
 use error::CliError;
 use std::process::exit;
+use aws_sts::AwsSts;
 
 type Result<T> = std::result::Result<T, CliError>;
 
@@ -73,7 +69,7 @@ async fn run() -> Result<()> {
                 config.set_session_name(&session_name)?;
             }
         },
-        CliOptions::Login {} => aws_login(config).await?,
+        CliOptions::Login {} => AwsSts::login(config).await?,
         CliOptions::Role { cmd } => match cmd {
             RoleOptions::List {} => {
                 let roles = config.get_roles();
@@ -83,41 +79,14 @@ async fn run() -> Result<()> {
             RoleOptions::Add { name, arn} => config.add_role(&name, &arn)?,
 
         },
-        CliOptions::Fetch { name } => config.fetch_sts(&name).await?,
+        CliOptions::Fetch { name } => {
+            let sts_credentials = AwsSts::fetch_sts(config, &name).await?;
+            println!("export AWS_ACCESS_KEY_ID={}", sts_credentials.access_key_id);
+            println!("export AWS_SECRET_ACCESS_KEY={}", sts_credentials.secret_access_key);
+            println!("export AWS_SESSION_TOKEN={}", sts_credentials.session_token);
+            println!("export AWS_CREDENTIAL_EXPIRATION={}", sts_credentials.expiration);
+        },
     }
-
-    Ok(())
-}
-
-async fn aws_login(mut config: config::CliConfig) -> Result<()> {
-    print!("Enter token code for MFA ({}): ", config.get_mfa());
-    io::stdout().flush().ok().expect("Could not flush stdout");
-
-    let mut token_code = String::new();
-    io::stdin().read_line(&mut token_code)?;
-    let code = token_code.trim_end();
-
-    let mut provider = ChainProvider::new();
-    provider.set_timeout(Duration::from_secs(2));
-
-    let sts = StsClient::new_with(
-        HttpClient::new().expect("failed"),
-        provider,
-        Region::EuWest1
-    );
-
-    let get_token_request = GetSessionTokenRequest {
-        token_code: Some(code.to_string()),
-        serial_number: Some(config.get_mfa()),
-        ..Default::default()
-    };
-
-    let credentials = sts.get_session_token(get_token_request)
-        .await?
-        .credentials
-        .ok_or(CliError::NoCredentialsInResponse())?;
-
-    config.set_session_token(credentials)?;
 
     Ok(())
 }
