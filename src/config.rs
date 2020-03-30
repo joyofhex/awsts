@@ -22,7 +22,7 @@ struct CredentialsDef {
     expiration: String,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Default)]
 struct Config {
     mfa_serial_number: String,
     session_name: String,
@@ -33,9 +33,17 @@ struct Config {
 impl CliConfig {
     pub fn load(program_name: &str) -> super::Result<CliConfig> {
         let path = Self::construct_path(program_name);
-        let contents = std::fs::read_to_string(&path)?;
-        let options= serde_json::from_str(&contents)?;
-        Ok(CliConfig { path, options })
+        if path.is_file() {
+            let contents = std::fs::read_to_string(&path)?;
+            let options= serde_json::from_str(&contents)?;
+            Ok(CliConfig { path, options })
+        } else {
+            let options = Config {
+                session_name: "default".to_string(),
+                ..Default::default()
+            };
+            Ok(CliConfig { path, options })
+        }
     }
 
     fn save(&self) -> super::Result<()> {
