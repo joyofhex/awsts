@@ -23,6 +23,7 @@ pub struct Credentials {
 struct Config {
     mfa_serial_number: String,
     session_name: String,
+    region: Option<String>,
     roles: HashMap<String, String>,
     session_token: Option<Credentials>,
 }
@@ -33,11 +34,12 @@ impl CliConfig {
 
         if path.is_file() {
             let contents = std::fs::read_to_string(&path)?;
-            let options= serde_json::from_str(&contents)?;
+            let options: Config = serde_json::from_str(&contents)?;
             Ok(CliConfig { path, options })
         } else {
             let options = Config {
                 session_name: "default".to_string(),
+                region: Some("us-east-1".to_string()),
                 ..Default::default()
             };
             Ok(CliConfig { path, options })
@@ -117,6 +119,19 @@ impl CliConfig {
 
     pub fn get_role_arn(&self, name: &str) -> Option<&String> {
         self.options.roles.get(name)
+    }
+
+    pub fn get_region(&self) -> String {
+        match &self.options.region {
+            Some(region) => region.clone(),
+            None => "us-east-1".to_string(),
+        }
+    }
+
+    pub fn set_region(&mut self, region: &str) -> super::Result<()> {
+        self.options.region = Some(region.to_owned());
+        self.save()?;
+        Ok(())
     }
 }
 

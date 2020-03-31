@@ -8,6 +8,7 @@ use crate::error::CliError;
 use std::io::Write;
 use chrono::{DateTime, Utc};
 use crate::config::Credentials;
+use std::str::FromStr;
 
 
 pub struct AwsSts {}
@@ -24,10 +25,13 @@ impl AwsSts {
         let mut provider = ChainProvider::new();
         provider.set_timeout(Duration::from_secs(2));
 
+        let region = Region::from_str(&config.get_region())
+            .unwrap_or(Region::default());
+
         let sts = StsClient::new_with(
             HttpClient::new().expect("failed"),
             provider,
-            Region::EuWest1
+            region
         );
 
         let get_token_request = GetSessionTokenRequest {
@@ -61,10 +65,13 @@ impl AwsSts {
         );
 
         let provider = StaticProvider::from(credentials);
+        let region = Region::from_str(&config.get_region())
+            .unwrap_or(Region::default());
+
         let sts = StsClient::new_with(
             HttpClient::new().expect("failed"),
             provider,
-            Region::EuWest1,
+            region,
         );
 
         let arn = config.get_role_arn(name)

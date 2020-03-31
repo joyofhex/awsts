@@ -32,6 +32,8 @@ enum CliOptions {
         serial_number: Option<String>,
         #[structopt(long)]
         session_name: Option<String>,
+        #[structopt(long)]
+        region: Option<String>,
     },
     Login {},
     Role {
@@ -60,13 +62,17 @@ async fn run() -> Result<()> {
     let args = CliOptions::from_args();
 
     match args {
-        CliOptions::Config { serial_number, session_name } => {
+        CliOptions::Config { serial_number, session_name, region } => {
             if let Some(serial_number) = serial_number {
                 config.set_mfa(&serial_number)?;
             }
 
             if let Some(session_name) = session_name {
                 config.set_session_name(&session_name)?;
+            }
+
+            if let Some(region) = region {
+                config.set_region(&region)?;
             }
         },
         CliOptions::Login {} => AwsSts::login(config).await?,
