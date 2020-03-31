@@ -63,6 +63,10 @@ async fn run() -> Result<()> {
 
     match args {
         CliOptions::Config { serial_number, session_name, region } => {
+            if serial_number == None && session_name == None && region == None {
+                print_config(&config);
+            }
+
             if let Some(serial_number) = serial_number {
                 config.set_mfa(&serial_number)?;
             }
@@ -74,6 +78,7 @@ async fn run() -> Result<()> {
             if let Some(region) = region {
                 config.set_region(&region)?;
             }
+
         },
         CliOptions::Login {} => AwsSts::login(config).await?,
         CliOptions::Role { cmd } => match cmd {
@@ -95,6 +100,15 @@ async fn run() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn print_config(config: &config::CliConfig) {
+    println!("MFA: {}", config.get_mfa());
+    println!("Session Name: {}", config.get_session_name());
+    println!("Region: {}", config.get_region());
+    println!("\nRoles:");
+    print_roles(config.get_roles());
+
 }
 
 fn print_roles(roles: HashMap<String, String>) {
