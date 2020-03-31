@@ -16,7 +16,7 @@ pub struct AwsSts {}
 impl AwsSts {
     pub async fn login(mut config: config::CliConfig) -> super::Result<()> {
         print!("Enter token code for MFA ({}): ", config.get_mfa());
-        io::stdout().flush().ok().expect("Could not flush stdout");
+        io::stdout().flush().expect("Could not flush stdout");
 
         let mut token_code = String::new();
         io::stdin().read_line(&mut token_code)?;
@@ -26,7 +26,7 @@ impl AwsSts {
         provider.set_timeout(Duration::from_secs(2));
 
         let region = Region::from_str(&config.get_region())
-            .unwrap_or(Region::default());
+            .unwrap_or_default();
 
         let sts = StsClient::new_with(
             HttpClient::new().expect("failed"),
@@ -66,7 +66,7 @@ impl AwsSts {
 
         let provider = StaticProvider::from(credentials);
         let region = Region::from_str(&config.get_region())
-            .unwrap_or(Region::default());
+            .unwrap_or_default();
 
         let sts = StsClient::new_with(
             HttpClient::new().expect("failed"),
@@ -75,7 +75,7 @@ impl AwsSts {
         );
 
         let arn = config.get_role_arn(name)
-            .ok_or(CliError::RoleNotFound(name.to_string()))?;
+            .ok_or_else(|| CliError::RoleNotFound(name.to_string()))?;
 
         let assume_role_result = sts.assume_role(
             AssumeRoleRequest {

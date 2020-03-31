@@ -112,7 +112,7 @@ fn print_config(config: &config::CliConfig) {
 }
 
 fn print_roles(roles: HashMap<String, String>) {
-    println!("{:10} {}", "Name", "ARN");
+    println!("{:10} ARN", "Name");
     for (name, arn) in roles {
         println!("{:10} {}", name, arn);
     }
