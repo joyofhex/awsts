@@ -19,20 +19,22 @@ enum RoleOptions {
         name: String,
     },
     Add {
+        #[structopt(help = "Short name to identify role")]
         name: String,
+        #[structopt(help = "ARN of role to assume")]
         arn: String,
     },
 }
 
 #[derive(Debug, StructOpt)]
-#[structopt(about = "Managed access to AWS Roles via STS")]
+#[structopt(author, about = "Managed access to AWS Roles via STS")]
 enum CliOptions {
     Config {
-        #[structopt(long)]
+        #[structopt(long, help = "Set MFA serial number")]
         serial_number: Option<String>,
-        #[structopt(long)]
+        #[structopt(long, help = "Set session name")]
         session_name: Option<String>,
-        #[structopt(long)]
+        #[structopt(long, help = "Set AWS Region name")]
         region: Option<String>,
     },
     Login {},
@@ -41,6 +43,7 @@ enum CliOptions {
         cmd: RoleOptions
     },
     Fetch {
+        #[structopt(help = "Role to assume")]
         name: String,
     },
 }
