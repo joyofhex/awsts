@@ -37,7 +37,10 @@ enum CliOptions {
         #[structopt(long, help = "Set AWS Region name")]
         region: Option<String>,
     },
-    Login {},
+    Login {
+        #[structopt(long, help = "Set credential profile to use")]
+        profile: Option<String>
+    },
     Role {
         #[structopt(subcommand)]
         cmd: RoleOptions
@@ -83,7 +86,9 @@ async fn run() -> Result<()> {
             }
 
         },
-        CliOptions::Login {} => AwsSts::login(config).await?,
+        CliOptions::Login { profile } => {
+            AwsSts::login(config, profile).await?
+        },
         CliOptions::Role { cmd } => match cmd {
             RoleOptions::List {} => {
                 let roles = config.get_roles();

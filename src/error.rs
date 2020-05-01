@@ -73,3 +73,9 @@ impl From<rusoto_core::RusotoError<GetSessionTokenError>> for CliError {
         CliError::RusotoError(err.to_string())
     }
 }
+
+impl From<rusoto_core::credential::CredentialsError> for CliError {
+    fn from(err: rusoto_core::credential::CredentialsError) -> CliError {
+        CliError::RusotoError(err.to_string())
+    }
+}

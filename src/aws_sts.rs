@@ -3,7 +3,7 @@ use std::io;
 use std::time::Duration;
 use rusoto_sts::{StsClient, GetSessionTokenRequest, Sts, AssumeRoleRequest};
 use rusoto_core::{HttpClient, Region};
-use rusoto_core::credential::{AwsCredentials, ChainProvider, StaticProvider};
+use rusoto_core::credential::{AwsCredentials, ChainProvider, StaticProvider, ProfileProvider};
 use crate::error::CliError;
 use std::io::Write;
 use chrono::{DateTime, Utc};
@@ -14,7 +14,7 @@ use std::str::FromStr;
 pub struct AwsSts {}
 
 impl AwsSts {
-    pub async fn login(mut config: config::CliConfig) -> super::Result<()> {
+    pub async fn login(mut config: config::CliConfig, profile: Option<String>) -> super::Result<()> {
         print!("Enter token code for MFA ({}): ", config.get_mfa());
         io::stdout().flush().expect("Could not flush stdout");
 
@@ -22,17 +22,32 @@ impl AwsSts {
         io::stdin().read_line(&mut token_code)?;
         let code = token_code.trim_end();
 
-        let mut provider = ChainProvider::new();
-        provider.set_timeout(Duration::from_secs(2));
 
         let region = Region::from_str(&config.get_region())
             .unwrap_or_default();
 
-        let sts = StsClient::new_with(
-            HttpClient::new().expect("failed"),
-            provider,
-            region
-        );
+        let sts = match profile {
+            Some(profile) => {
+                let mut provider = ProfileProvider::new()?;
+                provider.set_profile(profile);
+
+                StsClient::new_with(
+                    HttpClient::new().expect("failed"),
+                    provider,
+                    region
+                )
+            },
+            None => {
+                let mut provider = ChainProvider::new();
+                provider.set_timeout(Duration::from_secs(2));
+
+                StsClient::new_with(
+                    HttpClient::new().expect("failed"),
+                    provider,
+                    region
+                )
+            }
+        };
 
         let get_token_request = GetSessionTokenRequest {
             token_code: Some(code.to_string()),
