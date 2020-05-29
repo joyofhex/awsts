@@ -1,14 +1,14 @@
 extern crate structopt;
 
+mod aws_sts;
 mod config;
 mod error;
-mod aws_sts;
 
-use structopt::StructOpt;
-use std::collections::HashMap;
-use error::CliError;
-use std::process::exit;
 use aws_sts::AwsSts;
+use error::CliError;
+use std::collections::HashMap;
+use std::process::exit;
+use structopt::StructOpt;
 
 type Result<T> = std::result::Result<T, CliError>;
 
@@ -37,10 +37,13 @@ enum CliOptions {
         #[structopt(long, help = "Set AWS Region name")]
         region: Option<String>,
     },
-    Login {},
+    Login {
+        #[structopt(long, help = "Set credential profile to use")]
+        profile: Option<String>,
+    },
     Role {
         #[structopt(subcommand)]
-        cmd: RoleOptions
+        cmd: RoleOptions,
     },
     Fetch {
         #[structopt(help = "Role to assume")]
@@ -65,7 +68,11 @@ async fn run() -> Result<()> {
     let args = CliOptions::from_args();
 
     match args {
-        CliOptions::Config { serial_number, session_name, region } => {
+        CliOptions::Config {
+            serial_number,
+            session_name,
+            region,
+        } => {
             if serial_number == None && session_name == None && region == None {
                 print_config(&config);
             }
@@ -81,25 +88,29 @@ async fn run() -> Result<()> {
             if let Some(region) = region {
                 config.set_region(&region)?;
             }
-
-        },
-        CliOptions::Login {} => AwsSts::login(config).await?,
+        }
+        CliOptions::Login { profile } => AwsSts::login(config, profile).await?,
         CliOptions::Role { cmd } => match cmd {
             RoleOptions::List {} => {
                 let roles = config.get_roles();
                 print_roles(roles);
-            },
+            }
             RoleOptions::Remove { name } => config.remove_role(&name)?,
-            RoleOptions::Add { name, arn} => config.add_role(&name, &arn)?,
-
+            RoleOptions::Add { name, arn } => config.add_role(&name, &arn)?,
         },
         CliOptions::Fetch { name } => {
             let sts_credentials = AwsSts::fetch_sts(config, &name).await?;
             println!("export AWS_ACCESS_KEY_ID={}", sts_credentials.access_key_id);
-            println!("export AWS_SECRET_ACCESS_KEY={}", sts_credentials.secret_access_key);
+            println!(
+                "export AWS_SECRET_ACCESS_KEY={}",
+                sts_credentials.secret_access_key
+            );
             println!("export AWS_SESSION_TOKEN={}", sts_credentials.session_token);
-            println!("export AWS_CREDENTIAL_EXPIRATION={}", sts_credentials.expiration);
-        },
+            println!(
+                "export AWS_CREDENTIAL_EXPIRATION={}",
+                sts_credentials.expiration
+            );
+        }
     }
 
     Ok(())
@@ -111,7 +122,6 @@ fn print_config(config: &config::CliConfig) {
     println!("Region: {}", config.get_region());
     println!("\nRoles:");
     print_roles(config.get_roles());
-
 }
 
 fn print_roles(roles: HashMap<String, String>) {
@@ -120,4 +130,3 @@ fn print_roles(roles: HashMap<String, String>) {
         println!("{:10} {}", name, arn);
     }
 }
-

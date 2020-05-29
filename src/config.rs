@@ -1,10 +1,9 @@
-
-use std::path::PathBuf;
-use serde::{Serialize, Deserialize};
-use std::fs::{File, create_dir_all};
-use rusoto_sts::Credentials as RusotoCredentials;
-use std::collections::HashMap;
 use crate::error::CliError;
+use rusoto_sts::Credentials as RusotoCredentials;
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
+use std::fs::{create_dir_all, File};
+use std::path::PathBuf;
 
 pub struct CliConfig {
     path: PathBuf,
@@ -47,7 +46,10 @@ impl CliConfig {
     }
 
     fn save(&self) -> super::Result<()> {
-        let directory = self.path.parent().expect("Parent path could not be extracted.");
+        let directory = self
+            .path
+            .parent()
+            .expect("Parent path could not be extracted.");
 
         create_dir_all(directory)?;
         let file = File::create(&self.path)?;
@@ -57,8 +59,7 @@ impl CliConfig {
     }
 
     fn construct_path(program_name: &str) -> super::Result<PathBuf> {
-        let mut path = dirs::config_dir()
-            .ok_or(CliError::ConfigDirectoryNotAvailable())?;
+        let mut path = dirs::config_dir().ok_or(CliError::ConfigDirectoryNotAvailable())?;
 
         path.push(program_name);
         path.push("config");
@@ -88,7 +89,7 @@ impl CliConfig {
     }
 
     pub fn set_session_token(&mut self, credentials: RusotoCredentials) -> super::Result<()> {
-        let credentials= Credentials::from(credentials);
+        let credentials = Credentials::from(credentials);
         self.options.session_token = Some(credentials);
         self.save()?;
 
